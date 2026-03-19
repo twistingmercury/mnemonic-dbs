@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+#
+# Neo4j Migration Test Runner
+# Starts Neo4j via Docker Compose, applies migrations, runs BATS tests, and tears down.
+
+set -euo pipefail
+
+THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MIG_DIR="$(cd "${THIS_DIR}/.." && pwd)"
+BATS_DIR="${THIS_DIR}/bats"
+NEO4J_MIG_DIR="$(cd "${MIG_DIR}/neo4j" && pwd)"
+DOCKER_COMPOSE="${MIG_DIR}/docker-compose.yaml"
+
+MAX_RETRIES="${MAX_RETRIES:-30}"
+RETRY_INTERVAL="${RETRY_INTERVAL:-1}"
+NEO4J_USER="${NEO4J_USER:-neo4j}"
+NEO4J_PASSWORD="${NEO4J_PASSWORD:-mnemonic_dev}"
+
+printf "=== Neo4j Migrations Test Runner ===\n"
+
+validate(){
+    if [ ! -d "${THIS_DIR}" ]; then
+        printf "ERROR: '%s' could not be found\n" "${THIS_DIR}" >&2
+        return 1
+    fi
+
+    if [ ! -d "${BATS_DIR}" ]; then
+        printf "ERROR: '%s' could not be found\n" "${BATS_DIR}" >&2
+        return 1
+    fi
+
+    if [ ! -d "${MIG_DIR}" ]; then
+        printf "ERROR: '%s' could not be found\n" "${MIG_DIR}" >&2
+        return 1
+    fi
+
+    if [ ! -d "${NEO4J_MIG_DIR}" ]; then
+        printf "ERROR: '%s' could not be found\n" "${NEO4J_MIG_DIR}" >&2
+        return 1
+    fi
+
+    if [ ! -f "${DOCKER_COMPOSE}" ]; then
+        printf "ERROR: '%s' could not be found\n" "${DOCKER_COMPOSE}" >&2
+        return 1
+    fi
+
+    if [ ! -f "${NEO4J_MIG_DIR}/001_create_constraints.cypher" ]; then
+        printf "ERROR: Migration file '001_create_constraints.cypher' not found\n" >&2
+        return 1
+    fi
+
+    if [ ! -f "${NEO4J_MIG_DIR}/003_create_indexes.cypher" ]; then
+        printf "ERROR: Migration file '003_create_indexes.cypher' not found\n" >&2
+        return 1
+    fi
+
+    return 0
+}
+
+start_infra(){
+    printf "Starting Neo4j...\n"
+    if ! docker compose -f "${DOCKER_COMPOSE}" up -d neo4j; then
+        printf "ERROR: Failed to start Neo4j infrastructure\n" >&2
+        return 1
+    fi
+    return 0
+}
+
+stop_infra(){
+    printf "Stopping infrastructure...\n"
+    docker compose -f "${DOCKER_COMPOSE}" down -v --remove-orphans
+}
+
+get_neo4j_container(){
+    local container_id
+    container_id=$(docker compose -f "${DOCKER_COMPOSE}" ps -q neo4j)
+    if [ -z "${container_id}" ]; then
+        printf "ERROR: Could not find Neo4j container\n" >&2
+        return 1
+    fi
+    printf "%s" "${container_id}"
+    return 0
+}
+
+wait_for_neo4j(){
+    local retries=0
+    local max_retries="${MAX_RETRIES}"
+    local interval="${RETRY_INTERVAL}"
+    local container_id
+
+    if ! container_id=$(get_neo4j_container); then
+        return 1
+    fi
+
+    printf "Waiting for Neo4j to be ready...\n"
+
+    while [ "${retries}" -lt "${max_retries}" ]; do
+        if docker exec "${container_id}" cypher-shell -u "${NEO4J_USER}" -p "${NEO4J_PASSWORD}" "RETURN 1" 2>/dev/null 1>/dev/null; then
+            printf "Neo4j is ready\n"
+            return 0
+        fi
+
+        retries=$((retries + 1))
+        printf "Attempt %d/%d: Neo4j not ready yet, retrying in %d second(s)...\n" \
+            "${retries}" "${max_retries}" "${interval}"
+        sleep "${interval}"
+    done
+
+    printf "ERROR: Neo4j did not become ready after %d attempts\n" "${max_retries}" >&2
+    return 1
+}
+
+apply_migrations(){
+    local container_id
+
+    if ! container_id=$(get_neo4j_container); then
+        return 1
+    fi
+
+    printf "\nApplying Neo4j migrations...\n"
+
+    # Apply 001_create_constraints.cypher
+    printf "Applying 001_create_constraints.cypher...\n"
+    if ! docker cp "${NEO4J_MIG_DIR}/001_create_constraints.cypher" "${container_id}:/tmp/001_create_constraints.cypher"; then
+        printf "ERROR: Failed to copy 001_create_constraints.cypher to container\n" >&2
+        return 1
+    fi
+
+    if ! docker exec "${container_id}" cypher-shell -u "${NEO4J_USER}" -p "${NEO4J_PASSWORD}" -f /tmp/001_create_constraints.cypher; then
+        printf "ERROR: Failed to apply 001_create_constraints.cypher\n" >&2
+        return 1
+    fi
+
+    # Skip 002_create_existence_constraints.cypher (Enterprise Edition only)
+    printf "Skipping 002_create_existence_constraints.cypher (Enterprise Edition only)\n"
+
+    # Apply 003_create_indexes.cypher
+    printf "Applying 003_create_indexes.cypher...\n"
+    if ! docker cp "${NEO4J_MIG_DIR}/003_create_indexes.cypher" "${container_id}:/tmp/003_create_indexes.cypher"; then
+        printf "ERROR: Failed to copy 003_create_indexes.cypher to container\n" >&2
+        return 1
+    fi
+
+    if ! docker exec "${container_id}" cypher-shell -u "${NEO4J_USER}" -p "${NEO4J_PASSWORD}" -f /tmp/003_create_indexes.cypher; then
+        printf "ERROR: Failed to apply 003_create_indexes.cypher\n" >&2
+        return 1
+    fi
+
+    printf "Migrations applied successfully\n"
+    return 0
+}
+
+run_tests(){
+    local container_id
+
+    if ! wait_for_neo4j; then
+        return 1
+    fi
+
+    if ! apply_migrations; then
+        return 1
+    fi
+
+    if ! container_id=$(get_neo4j_container); then
+        return 1
+    fi
+
+    # Export container ID for BATS tests
+    export NEO4J_CONTAINER="${container_id}"
+    export NEO4J_USER
+    export NEO4J_PASSWORD
+
+    printf "\nRunning BATS tests...\n"
+    if ! bats "${BATS_DIR}/neo4j-migrations.bats"; then
+        printf "ERROR: BATS tests failed\n" >&2
+        return 1
+    fi
+
+    printf "\nAll tests passed successfully\n"
+    return 0
+}
+
+main(){
+    if ! validate; then
+        return 1
+    fi
+
+    trap stop_infra EXIT
+
+    if ! start_infra; then
+        return 1
+    fi
+
+    if ! run_tests; then
+        return 1
+    fi
+}
+
+main "$@"
