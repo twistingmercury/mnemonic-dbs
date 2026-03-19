@@ -1,125 +1,77 @@
-# Mnemonic
+# mnemonic-dbs
 
-[![Mnemonic CD](https://github.com/twistingmercury/ace/actions/workflows/mnemonic-cd.yaml/badge.svg)](https://github.com/twistingmercury/ace/actions/workflows/mnemonic-cd.yaml)
+> **Maturity Level**: Emerging - Pre-seeded database images and schema migrations for the Mnemonic project
+> **Version**: v1.0.0
 
-> **Maturity Level**: Emerging - Pivot completed, MCP server and Admin API under development
+> - **Emerging**: Prototype, not production-ready, expect breaking changes
+> - **Basic**: Production-ready but actively evolving, expect minor version changes
+> - **Mature**: Stable, battle-tested, changes are rare
 
 ---
 
-Mnemonic is a team knowledge graph and tooling synchronization service for Claude Code, providing semantic pattern search over curated institutional knowledge and synchronized access to agents, skills, and commands across team members.
+## Table of Contents
+
+- [Usage](#usage)
+- [How it works](#how-it-works)
+- [Key Considerations](#key-considerations)
+- [Development Considerations](#development-considerations)
+- [Versioning](#versioning)
 
 ## Usage
 
-Mnemonic provides two interfaces:
-
-**MCP Server** (read-only, for Claude Code):
-
-```json
-// Claude Code invokes via MCP
-{
-  "tool": "search_patterns",
-  "arguments": {
-    "query": "Go error handling patterns"
-  }
-}
-// Returns: Ranked patterns with similarity scores
-```
-
-**Admin REST API** (for data management):
+Pull the pre-seeded images for use in local development or testing:
 
 ```bash
-# Store a new pattern
-curl -X POST http://localhost:8080/v1/api/patterns \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "go-error-wrapping",
-    "description": "Pattern for wrapping errors with context",
-    "content": "Use fmt.Errorf with %w for error chains...",
-    "tags": ["go", "error-handling"],
-    "agent_associations": [{"agent_name": "go-software-engineer", "relevance": 0.9}]
-  }'
-
-# Search patterns semantically
-curl -X GET "http://localhost:8080/v1/api/patterns/search?q=error+handling&limit=5"
+docker pull ghcr.io/twistingmercury/mnemonic-postgres:latest-dev
+docker pull ghcr.io/twistingmercury/mnemonic-neo4j:latest-dev
 ```
 
-See the [API Specification](docs/openapi/mnemonic-v1.yaml)
-for complete endpoint documentation.
+Both images are self-initializing — the schema is applied on first container start. No migration tool required.
 
 ## How it works
 
-Mnemonic provides two core capabilities:
+**PostgreSQL image** (`ghcr.io/twistingmercury/mnemonic-postgres`): built `FROM pgvector/pgvector:pg16`. All `.up.sql` migration files are copied into `/docker-entrypoint-initdb.d/` and executed automatically in order on first start.
 
-**Team knowledge graph**: Curated engineering patterns, guidelines, and institutional knowledge stored in a knowledge graph (Postgres + PGVector + Neo4j). Relevant patterns are retrieved using semantic search and graph traversal, providing agents with project-specific context. Patterns are enriched automatically with embeddings and concept extraction to enable semantic search via the MCP `search_patterns` tool.
+**Neo4j image** (`ghcr.io/twistingmercury/mnemonic-neo4j`): built `FROM neo4j:5` with APOC enabled. The build script starts a temporary container, applies the Cypher constraint and index files via `cypher-shell`, then commits the result as the final image.
 
-**Tooling synchronization**: Team-wide agents, skills, and commands are stored in Mnemonic and synchronized to team members via the Admin REST API. This ensures consistent Claude Code configurations across the team, eliminating "works on my machine" issues and enabling rapid onboarding.
-
-**Dual protocol architecture**: Read-only MCP server (port 8081) for Claude Code integration, separate Admin REST API (port 8080) for data management. Both interfaces run in a single server process backed by Postgres and Neo4j.
-
-### Architectural Pivot
-
-Mnemonic originally focused on deterministic agent routing but pivoted in February 2026 to focus on team knowledge and tooling sync (see [2026-02-14-mnemonic-pivot-knowledge-sync.md](docs/plans/2026-02-14-mnemonic-pivot-knowledge-sync.md)). The user is the orchestrator in spec-based development; Mnemonic provides memory and tools, not routing decisions.
-
-### Phased Approach
-
-- **Phase 1** (Current): Local deployment with MCP server, Admin API, and pattern enrichment
-- **Phase 2** (Future): Production deployment with authentication, rate limiting, and multi-region support
+**CI**: a GitHub Actions workflow triggers on any change to `src/postgres/**` or `src/neo4j/**`, runs the BATS test suites for both databases, then builds and pushes both images to GHCR.
 
 ## Key Considerations
 
-- **Pivot completed**: Routing engine removed, focus shifted to knowledge graph and tooling sync (February 2026)
-- **Current state**: Repository layer with vector similarity search functional, MCP server and Admin API endpoints in development, pattern enrichment pipeline planned
-- **MVP scope**: Local deployment via Docker Compose, single-user trusted environment, no authentication
-- **MCP integration**: Claude Code connects via MCP protocol on port 8081 for read-only pattern search
-- **Admin API**: Data management (patterns, agents, skills, commands) via REST on port 8080
-- **Post-MVP features**: Multi-user authentication, production deployment, rate limiting, remote access
+- `002_create_existence_constraints.cypher` is skipped at build time — existence constraints require Neo4j Enterprise Edition
+- `.down.sql` files are not included; rollback is handled by rebuilding from a prior image tag
+- Images are tagged `latest` + version on `main`, `latest-dev` + version-dev on `develop`
 
 ## Development Considerations
 
 ### Quick Start
 
-Clone and build:
+Requires Docker 27+, Docker Compose 2.32+, `bats-core`, and `psql`.
+
+Build both images locally:
 
 ```bash
-git clone https://github.com/twistingmercury/mnemonic.git
-cd mnemonic/src/mnemonic
-./build/build.sh
+make build
 ```
 
-Requires Go 1.25+, Docker 27+, and Docker Compose 2.32+
-([Go installation](https://go.dev/doc/install),
-[Docker installation](https://docs.docker.com/get-docker/))
-
-### Building & running
-
-Build and test Mnemonic:
+Build individually:
 
 ```bash
-cd src/mnemonic
-./build/build.sh
+make build-postgres
+make build-neo4j
 ```
-
-The build script runs unit tests, integration tests (with PostgreSQL in
-Docker), and builds the Docker image.
 
 ### Testing
 
-Run unit tests:
+BATS tests verify the schema state after all migrations have been applied.
 
 ```bash
-cd src/mnemonic
-go test ./...
+make test           # run both test suites
+make test-postgres  # PostgreSQL only
+make test-neo4j     # Neo4j only
 ```
 
-Run integration tests (requires Docker):
-
-```bash
-cd src/mnemonic/internal/repository/tests
-./run-agent-integration-tests.sh
-./run-pattern-integration-tests.sh
-```
-
-The build script runs both unit and integration tests automatically.
+Tests spin up a local Docker Compose stack on isolated ports (Postgres `5435`, Neo4j bolt `7690`) so they do not conflict with other running stacks.
 
 ### Versioning
 
@@ -130,35 +82,3 @@ Version is determined from git tags:
 ```bash
 git describe --tags --always
 ```
-
-No releases published yet. See [CHANGELOG.md](CHANGELOG.md) for
-development progress.
-
-## Documentation
-
-### Background
-
-- [Project Blog](https://twistingmercury.github.io) - Development
-  journey, design rationale, and updates
-
-### Architecture
-
-- [Architecture Overview](docs/architecture/00-overview.md) - System
-  model, phased approach, key principles
-- [Requirements](docs/architecture/01-requirements.md) - Problem
-  statement and success criteria
-- [Architectural Decisions](docs/architecture/02-architectural-decisions.md) -
-  Major decisions with rationale
-- [System Architecture](docs/architecture/03-system-architecture.md) -
-  Component breakdown and data flow
-
-### Design
-
-- [Pivot API Specification](docs/design/2026-02-15-pivot-api-specification.md) -
-  REST Admin API + MCP Server specification (post-pivot)
-- [Pattern Processing](docs/design/pattern-processing.md) -
-  Pattern enrichment and search pipeline
-- [Observability Implementation](docs/design/observability-implementation.md) -
-  Metrics, tracing, and logging design
-- [Configuration](docs/design/configuration.md) -
-  Server configuration reference

@@ -32,6 +32,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install bats
+        run: sudo apt-get update && sudo apt-get install -y bats
+
       - name: Run postgres tests
         run: make tests-postgres
 
@@ -46,6 +49,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Install bats
+        run: sudo apt-get update && sudo apt-get install -y bats
 
       - name: Run neo4j tests
         run: make tests-neo4j
