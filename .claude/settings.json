@@ -12,6 +12,7 @@
       "Bash(gh pr create:*)",
       "Bash(gh repo:*)",
       "Bash(git mv:*)",
+      "Bash(git push origin develop)",
       "Bash(git:*)",
       "Bash(go:*)",
       "Bash(goimports -w:*)",
@@ -47,7 +48,6 @@
       "WebFetch(domain:localhost)"
     ],
     "deny": [
-      "Bash(git push:*)",
       "Bash(rm -rf:*)"
     ]
   }
