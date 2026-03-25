@@ -13,11 +13,11 @@
 
 ### PostgreSQL (`pgvector/pgvector:pg16`)
 
-**Purpose:** Relational store for all application entities — agents, patterns, skills, skill files, enrichment jobs, and semantic search chunks. PGVector provides the `vector` extension for embedding storage and HNSW/IVFFlat similarity search.
+**Purpose:** Relational store for all application entities — agents, patterns, skills, skill files, enrichment jobs, and semantic search chunks. PGVector provides the `vector` extension for embedding storage in `pattern_chunks` and HNSW similarity search.
 
 | Criterion | Requirement | How It Is Met |
 |---|---|---|
-| Semantic search | Vector similarity over pattern embeddings | `vector` extension with HNSW index |
+| Semantic search | Vector similarity over pattern chunk embeddings | `vector` extension with HNSW index |
 | Relational integrity | FK constraints between entities | Native Postgres foreign keys |
 | Enrichment tracking | Job state and retry tracking | `enrichment_jobs` table with status column |
 | Flexible metadata | Tags, agent definitions as JSON | `jsonb` columns with GIN indexes |
@@ -51,7 +51,6 @@ erDiagram
         varchar description
         text content
         jsonb tags
-        vector embedding
         varchar enrichment_status
         text enrichment_error
         timestamptz enriched_at
@@ -59,35 +58,38 @@ erDiagram
         timestamptz updated_at
     }
     pattern_agent_associations {
-        uuid id PK
-        uuid pattern_id FK
-        uuid agent_id FK
+        uuid pattern_id PK "FK"
+        uuid agent_id PK "FK"
         float relevance
-        timestamptz created_at
     }
     enrichment_jobs {
         uuid id PK
-        uuid pattern_id FK
-        uuid chunk_id FK
+        uuid pattern_id FK "nullable"
+        uuid chunk_id FK "nullable"
         varchar status
-        int attempt_count
-        text error
+        int attempts
+        int max_attempts
+        text last_error
+        timestamptz scheduled_for
+        timestamptz started_at
+        timestamptz completed_at
         timestamptz created_at
         timestamptz updated_at
     }
     skills {
         uuid id PK
-        uuid agent_id FK
         varchar name
-        text content
+        jsonb definition
+        varchar crc64
         timestamptz created_at
         timestamptz updated_at
     }
     skill_files {
         uuid id PK
         uuid skill_id FK
-        varchar filename
+        varchar path
         text content
+        varchar crc64
         timestamptz created_at
         timestamptz updated_at
     }
@@ -105,7 +107,6 @@ erDiagram
     agents ||--o{ pattern_agent_associations : "associated with"
     patterns ||--o{ enrichment_jobs : "queued for"
     pattern_chunks ||--o{ enrichment_jobs : "queued for"
-    agents ||--o{ skills : "owns"
     skills ||--o{ skill_files : "contains"
     patterns ||--o{ pattern_chunks : "split into"
 ```
@@ -115,7 +116,7 @@ erDiagram
 | Table | Migration | Purpose |
 |---|---|---|
 | `agents` | 000002 | Team agents with JSONB definition blobs |
-| `patterns` | 000003 | Reusable context patterns with vector embeddings |
+| `patterns` | 000003 | Reusable context patterns (embeddings moved to pattern_chunks in migration 000009) |
 | `pattern_agent_associations` | 000004 | Many-to-many relevance mapping between patterns and agents |
 | `enrichment_jobs` | 000005 | Queue and state tracking for pattern/chunk enrichment |
 | `skills` | 000007 | Skills owned by agents |
@@ -128,13 +129,12 @@ erDiagram
 |---|---|---|---|
 | `idx_agents_definition` | `agents` | GIN | Fast JSONB queries against agent definition |
 | `idx_patterns_enriched` | `patterns` | B-tree | Filter patterns by enrichment status |
-| `idx_patterns_embedding` | `patterns` | IVFFlat | Vector similarity search on pattern embeddings |
 | `idx_pattern_chunks_embedding` | `pattern_chunks` | HNSW | Vector similarity search on chunk embeddings (vector(2000)) |
 | Various on `enrichment_jobs` | `enrichment_jobs` | B-tree | Status and retry queries |
 
 ### Embedding Dimensions
 
-Pattern embeddings were originally `vector(1536)` (text-embedding-3-small). Migration 000010 changed both the `patterns.embedding` column and the `pattern_chunks.embedding` column to `vector(2000)`.
+Pattern chunk embeddings were originally `vector(1536)` (text-embedding-3-small). Migration 000010 changed `pattern_chunks.embedding` from `vector(1536)` to `vector(2000)`. (The `patterns.embedding` column was removed in migration 000009.)
 
 ## Neo4j Schema
 
