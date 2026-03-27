@@ -26,11 +26,6 @@
 CREATE CONSTRAINT pattern_name_exists IF NOT EXISTS
 FOR (p:Pattern) REQUIRE p.name IS NOT NULL;
 
-// Every Agent node must have a name property.
-// The name is the primary identifier synced from PostgreSQL.
-CREATE CONSTRAINT agent_name_exists IF NOT EXISTS
-FOR (a:Agent) REQUIRE a.name IS NOT NULL;
-
 // Every Concept node must have a name property.
 // The name is the normalized identifier used for deduplication.
 CREATE CONSTRAINT concept_name_exists IF NOT EXISTS
@@ -48,6 +43,5 @@ SET v.version = 2, v.migratedAt = datetime(), v.migration = '002_create_existenc
 // =============================================================================
 // To reverse this migration, run:
 //   DROP CONSTRAINT pattern_name_exists IF EXISTS;
-//   DROP CONSTRAINT agent_name_exists IF EXISTS;
 //   DROP CONSTRAINT concept_name_exists IF EXISTS;
 //   MERGE (v:SchemaVersion {name: 'mnemonic'}) SET v.version = 1, v.migratedAt = datetime();

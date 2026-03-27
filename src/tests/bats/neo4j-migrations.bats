@@ -27,14 +27,6 @@ run_cypher() {
     [ -n "$result" ]
 }
 
-@test "constraint agent_name_unique exists" {
-    local query="SHOW CONSTRAINTS WHERE name = 'agent_name_unique'"
-    local result
-    result=$(run_cypher "$query")
-
-    [ -n "$result" ]
-}
-
 @test "constraint concept_name_unique exists" {
     local query="SHOW CONSTRAINTS WHERE name = 'concept_name_unique'"
     local result
@@ -75,16 +67,8 @@ run_cypher() {
     [ -n "$result" ]
 }
 
-@test "index rel_relevant_for_relevance exists" {
-    local query="SHOW INDEXES WHERE name = 'rel_relevant_for_relevance'"
-    local result
-    result=$(run_cypher "$query")
-
-    [ -n "$result" ]
-}
-
 @test "expected number of constraints exist" {
-    # Expected: 3 uniqueness constraints (pattern_id_unique, agent_name_unique, concept_name_unique)
+    # Expected: 2 uniqueness constraints (pattern_id_unique, concept_name_unique)
     # Skipping Enterprise Edition existence constraints (not available in Community Edition)
     local query="SHOW CONSTRAINTS YIELD name RETURN count(*) AS count"
     local result
@@ -92,20 +76,20 @@ run_cypher() {
     local count
     count=$(printf '%s' "$result" | grep -E '^[0-9]+$' | head -n 1)
 
-    [ "$count" -eq 3 ]
+    [ "$count" -eq 2 ]
 }
 
 @test "expected number of indexes exist" {
-    # Expected: at least 8 indexes
-    #   - 3 auto-created by uniqueness constraints (pattern_id, agent_name, concept_name)
-    #   - 5 explicit indexes from 003_create_indexes.cypher
+    # Expected: at least 6 indexes
+    #   - 2 auto-created by uniqueness constraints (pattern_id, concept_name)
+    #   - 4 explicit indexes from 003_create_indexes.cypher
     local query="SHOW INDEXES YIELD name RETURN count(*) AS count"
     local result
     result=$(run_cypher "$query")
     local count
     count=$(printf '%s' "$result" | grep -E '^[0-9]+$' | head -n 1)
 
-    [ "$count" -ge 8 ]
+    [ "$count" -ge 6 ]
 }
 
 @test "schema version node exists with correct version" {
@@ -131,19 +115,19 @@ run_cypher() {
         -u "${NEO4J_USER}" -p "${NEO4J_PASSWORD}" \
         -f /tmp/003_create_indexes.cypher >/dev/null 2>&1
 
-    # Verify constraint count unchanged (still 3)
+    # Verify constraint count unchanged (still 2)
     local query="SHOW CONSTRAINTS YIELD name RETURN count(*) AS count"
     local result
     result=$(run_cypher "$query")
     local count
     count=$(printf '%s' "$result" | grep -E '^[0-9]+$' | head -n 1)
-    [ "$count" -eq 3 ]
+    [ "$count" -eq 2 ]
 
-    # Verify index count unchanged (still >= 8)
+    # Verify index count unchanged (still >= 6)
     query="SHOW INDEXES YIELD name RETURN count(*) AS count"
     result=$(run_cypher "$query")
     count=$(printf '%s' "$result" | grep -E '^[0-9]+$' | head -n 1)
-    [ "$count" -ge 8 ]
+    [ "$count" -ge 6 ]
 
     # Verify SchemaVersion still correct
     query="MATCH (v:SchemaVersion {name: 'mnemonic'}) RETURN v.version AS version"
