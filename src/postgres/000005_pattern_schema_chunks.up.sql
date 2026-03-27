@@ -1,4 +1,4 @@
--- src/migrations/postgres/000009_pattern_schema_chunks.up.sql
+-- src/migrations/postgres/000005_pattern_schema_chunks.up.sql
 -- Adds structured metadata columns to patterns, introduces chunk-based
 -- semantic search via pattern_chunks, and updates enrichment_jobs to
 -- support chunk-level enrichment jobs.
@@ -7,9 +7,9 @@
 -- Copyright 2025, Mnemonic Authors
 --
 -- Dependencies:
---   - 000003_create_patterns (for patterns table)
---   - 000005_create_enrichment_jobs (for enrichment_jobs table)
---   - 000006_create_performance_indexes (for idx_patterns_embedding, which is dropped)
+--   - 000002_create_patterns (for patterns table)
+--   - 000003_create_enrichment_jobs (for enrichment_jobs table)
+--   - 000004_create_performance_indexes (for idx_patterns_embedding, which is dropped)
 
 -- =============================================================================
 -- PATTERNS TABLE — drop embedding, remove content limit, add metadata columns

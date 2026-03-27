@@ -3,13 +3,12 @@
 // Part of Mnemonic MVP
 //
 // Dependencies: 001_create_constraints (uniqueness constraints also create indexes,
-//   but these additional indexes cover non-unique lookup, relationship properties,
-//   and full-text search)
+//   but these additional indexes cover non-unique lookup and full-text search)
 //   Optionally: 002_create_existence_constraints (Enterprise Edition only)
 //
 // Note: Neo4j automatically creates indexes for uniqueness constraints,
-// so Pattern.id, Agent.name, and Concept.name already have indexes from
-// migration 001. The indexes below cover additional query patterns.
+// so Pattern.id and Concept.name already have indexes from migration 001.
+// The indexes below cover additional query patterns.
 //
 // All indexes use IF NOT EXISTS for idempotent execution.
 //
@@ -30,17 +29,6 @@ FOR (p:Pattern) ON (p.name);
 // Used when querying concepts of a specific category for pattern discovery.
 CREATE INDEX concept_type_index IF NOT EXISTS
 FOR (c:Concept) ON (c.type);
-
-// =============================================================================
-// RELATIONSHIP PROPERTY INDEXES
-// =============================================================================
-
-// Index on RELEVANT_FOR.relevance for ordering in FindPatternsByAgent queries.
-// Without this index, Neo4j sorts by relevance in memory at query time.
-// At MVP scale this is acceptable, but the index improves performance as
-// the number of RELEVANT_FOR relationships grows.
-CREATE INDEX rel_relevant_for_relevance IF NOT EXISTS
-FOR ()-[r:RELEVANT_FOR]-() ON (r.relevance);
 
 // =============================================================================
 // FULL-TEXT SEARCH INDEXES
@@ -75,7 +63,6 @@ SET v.version = 3, v.migratedAt = datetime(), v.migration = '003_create_indexes'
 //   DROP INDEX concept_type_index IF EXISTS;
 //   DROP INDEX pattern_content_fulltext IF EXISTS;
 //   DROP INDEX concept_name_fulltext IF EXISTS;
-//   DROP INDEX rel_relevant_for_relevance IF EXISTS;
 //   -- Community Edition (002 skipped): set version back to 1
 //   MERGE (v:SchemaVersion {name: 'mnemonic'}) SET v.version = 1, v.migratedAt = datetime();
 //   -- Enterprise Edition (002 applied): set version back to 2

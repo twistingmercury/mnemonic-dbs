@@ -48,43 +48,19 @@ repo_root() {
 
 # --- Tables ---
 
-@test "up: table agents exists (000002)" {
-    local result
-    result=$(run_psql "SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'agents';")
-    [ -n "$result" ]
-}
-
-@test "up: table patterns exists (000003)" {
+@test "up: table patterns exists (000002)" {
     local result
     result=$(run_psql "SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'patterns';")
     [ -n "$result" ]
 }
 
-@test "up: table pattern_agent_associations exists (000004)" {
-    local result
-    result=$(run_psql "SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'pattern_agent_associations';")
-    [ -n "$result" ]
-}
-
-@test "up: table enrichment_jobs exists (000005)" {
+@test "up: table enrichment_jobs exists (000003)" {
     local result
     result=$(run_psql "SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'enrichment_jobs';")
     [ -n "$result" ]
 }
 
-@test "up: table skills exists (000007)" {
-    local result
-    result=$(run_psql "SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'skills';")
-    [ -n "$result" ]
-}
-
-@test "up: table skill_files exists (000008)" {
-    local result
-    result=$(run_psql "SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'skill_files';")
-    [ -n "$result" ]
-}
-
-@test "up: table pattern_chunks exists (000009)" {
+@test "up: table pattern_chunks exists (000005)" {
     local result
     result=$(run_psql "SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'pattern_chunks';")
     [ -n "$result" ]
@@ -92,7 +68,7 @@ repo_root() {
 
 # --- Schema spot-checks ---
 
-@test "up: pattern_chunks.embedding is vector(2000) (000010)" {
+@test "up: pattern_chunks.embedding is vector(2000) (000006)" {
     local col_type
     col_type=$(run_psql "
         SELECT format_type(a.atttypid, a.atttypmod)
@@ -106,7 +82,7 @@ repo_root() {
     [ "$col_type" = "vector(2000)" ]
 }
 
-@test "up: enrichment_jobs has pattern_id column (000005)" {
+@test "up: enrichment_jobs has pattern_id column (000003)" {
     local result
     result=$(run_psql "
         SELECT 1
@@ -118,7 +94,7 @@ repo_root() {
     [ -n "$result" ]
 }
 
-@test "up: enrichment_jobs has chunk_id column (000009)" {
+@test "up: enrichment_jobs has chunk_id column (000005)" {
     local result
     result=$(run_psql "
         SELECT 1
@@ -130,8 +106,8 @@ repo_root() {
     [ -n "$result" ]
 }
 
-# pattern_id became nullable in 000009
-@test "up: enrichment_jobs.pattern_id is nullable (000009)" {
+# pattern_id became nullable in 000005
+@test "up: enrichment_jobs.pattern_id is nullable (000005)" {
     local result
     result=$(run_psql "
         SELECT is_nullable
@@ -145,7 +121,7 @@ repo_root() {
 
 # --- Indexes ---
 
-@test "up: idx_pattern_chunks_embedding HNSW index exists (000009/000010)" {
+@test "up: idx_pattern_chunks_embedding HNSW index exists (000005/000006)" {
     local result
     result=$(run_psql "
         SELECT 1
@@ -156,7 +132,7 @@ repo_root() {
     [ -n "$result" ]
 }
 
-@test "up: at least one index on enrichment_jobs exists (000005)" {
+@test "up: at least one index on enrichment_jobs exists (000003)" {
     local count
     count=$(run_psql "
         SELECT COUNT(*)
@@ -168,7 +144,7 @@ repo_root() {
     [ "$count" -ge 1 ]
 }
 
-@test "up: idx_patterns_enriched exists (000006)" {
+@test "up: idx_patterns_enriched exists (000004)" {
     local result
     result=$(run_psql "
         SELECT 1
@@ -179,13 +155,3 @@ repo_root() {
     [ -n "$result" ]
 }
 
-@test "up: idx_agents_definition GIN index exists (000002)" {
-    local result
-    result=$(run_psql "
-        SELECT 1
-        FROM pg_indexes
-        WHERE schemaname = 'public'
-          AND indexname   = 'idx_agents_definition';
-    ")
-    [ -n "$result" ]
-}

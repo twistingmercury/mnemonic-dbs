@@ -1,15 +1,14 @@
--- src/migrations/postgres/000005_create_enrichment_jobs.up.sql
+-- src/migrations/postgres/000003_create_enrichment_jobs.up.sql
 -- Creates the enrichment jobs queue table for background pattern processing.
 -- Part of Mnemonic MVP
 --
 -- Copyright 2025, Mnemonic Authors
 --
--- Dependencies: 000003_create_patterns (for patterns table)
+-- Dependencies: 000002_create_patterns (for patterns table)
 --
 -- Enrichment jobs track background processing of patterns:
--- - Embedding generation via OpenAI text-embedding-3-small
+-- - Embedding generation via OpenAI text-embedding-3-large
 -- - Entity extraction for Neo4j knowledge graph
--- - Pattern-agent association calculation
 --
 -- This table serves as a simple Postgres-backed job queue using
 -- FOR UPDATE SKIP LOCKED for safe concurrent processing.

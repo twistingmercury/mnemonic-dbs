@@ -1,12 +1,12 @@
--- src/migrations/postgres/000006_create_performance_indexes.up.sql
+-- src/migrations/postgres/000004_create_performance_indexes.up.sql
 -- Creates performance-optimized indexes for common query patterns.
 -- Part of Mnemonic MVP
 --
 -- Copyright 2025, Mnemonic Authors
 --
 -- Dependencies:
---   - 000003_create_patterns (for patterns table)
---   - 000005_create_enrichment_jobs (for enrichment_jobs table)
+--   - 000002_create_patterns (for patterns table)
+--   - 000003_create_enrichment_jobs (for enrichment_jobs table)
 
 -- =============================================================================
 -- PATTERNS INDEXES

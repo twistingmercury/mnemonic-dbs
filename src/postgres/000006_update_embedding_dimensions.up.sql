@@ -1,4 +1,4 @@
--- src/migrations/postgres/000010_update_embedding_dimensions.up.sql
+-- src/migrations/postgres/000006_update_embedding_dimensions.up.sql
 -- Updates pattern_chunks.embedding from vector(1536) to vector(2000)
 -- to support text-embedding-3-large with Matryoshka truncation at 2000 dimensions.
 -- 2000 is the maximum supported by pgvector's HNSW and IVFFlat index types.
@@ -6,7 +6,7 @@
 -- Copyright 2025, Mnemonic Authors
 --
 -- Dependencies:
---   - 000009_pattern_schema_chunks (creates pattern_chunks table with vector(1536))
+--   - 000005_pattern_schema_chunks (creates pattern_chunks table with vector(1536))
 
 -- Vector dimensions cannot be altered in place; must drop and recreate the HNSW index.
 drop index if exists idx_pattern_chunks_embedding;
